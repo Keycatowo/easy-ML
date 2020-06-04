@@ -29,7 +29,7 @@ from keras.optimizers import Adam
 from sklearn import preprocessing
 
 
-# In[143]:
+# In[2]:
 
 
 import matplotlib.pyplot as plt
@@ -54,7 +54,7 @@ def roc_plot(test, predict,title=None):
     plt.show()
 
 
-# In[149]:
+# In[57]:
 
 
 from sklearn.metrics import average_precision_score
@@ -74,6 +74,7 @@ def prc_plot(classifier,x_test,y_test,title = None):
     print('Average precision-recall score: {0:0.3f}'.format(
           average_precision))
     disp = plot_precision_recall_curve(classifier, x_test, y_test)
+    plt.axis([0, 1.05, 0, 1.05])
     if title is None:
         disp.ax_.set_title('%s:Precision-Recall curve: '
                        'AP={0:0.3f}'.format(average_precision))
@@ -82,7 +83,7 @@ def prc_plot(classifier,x_test,y_test,title = None):
                        'AP={0:0.3f}'.format(average_precision) % title)
 
 
-# In[140]:
+# In[4]:
 
 
 def build_dnn(layers = None):
@@ -101,7 +102,48 @@ def build_dnn(layers = None):
     return model
 
 
-# In[147]:
+# In[63]:
+
+
+# import matplotlib.pyplot as plt
+# from sklearn.metrics import confusion_matrix
+# import numpy as np
+
+def cm_plot(original_label, predict_label,title=None):
+    cm = confusion_matrix(original_label, predict_label)   # 由原标签和预测标签生成混淆矩阵
+    plt.figure()
+    
+    plt.imshow(cm,cmap=plt.cm.get_cmap('gray', 1))
+#     plt.matshow(cm, cmap=plt.cm.Blues)     # 画混淆矩阵，配色风格使用cm.Blues
+#     plt.colorbar()    # 颜色标签
+    for x in range(len(cm)):
+        for y in range(len(cm)):
+            plt.annotate(cm[y, x], xy=(x, y), horizontalalignment='center', verticalalignment='center')
+            # annotate主要在图形中添加注释1
+            # 第一个参数添加注释
+            # 第二个参数是注释的内容
+            # xy设置箭头尖的坐标
+            # horizontalalignment水平对齐
+            # verticalalignment垂直对齐
+            # 其余常用参数如下：
+            # xytext设置注释内容显示的起始位置
+            # arrowprops 用来设置箭头
+            # facecolor 设置箭头的颜色
+            # headlength 箭头的头的长度
+            # headwidth 箭头的宽度
+            # width 箭身的宽度
+    ax = plt.gca()
+#     ax.axes.xaxis.set_visible(False)
+#     ax.axes.yaxis.set_visible(False)
+    plt.ylabel('True label')  # 坐标轴标签
+    plt.xlabel('Predicted label')  # 坐标轴标签
+    if title == None:
+        plt.title('confusion matrix')
+    else:
+        plt.title(title)
+
+
+# In[69]:
 
 
 class esml:
@@ -119,7 +161,7 @@ class esml:
             L PRC 曲線
             L 訓練曲線(DNN)
             L 重要特徵(XGB)
-    version : 1.0
+    version : beta 1.0
     
     
     """
@@ -132,18 +174,28 @@ class esml:
         self.acc = {}
         self.cm = {}
     
+    # 重載[]讀取符號
     def __getitem__(self,index):
         return self.df[index]
     
     # 讀取資料
     def read_file(self,filename = None, remove_title = False):
-        self.df = pd.read_excel(filename)
+        file_type = filename.split(".")[-1]
+        if file_type == "csv":
+            self.df = pd.read_csv(filename)
+        elif file_type == "xlsx":
+            self.df = pd.read_excel(filename)
         if remove_title is True:
             self.df.drop([0],inplace=True)
-        print("Read file with:%s" %filename)
+        print("Read file with:%s\n" %filename)
     
     # 選擇要用的feature和label
     def load_data(self,features=None,label = "Result",drop_select=None):
+        # 沒給features的時候預設除了label以外的其他所有
+        if features == None:
+            features = list(self.df.columns)
+            features.remove(label)
+            
         # 檢查feature存在
         for item in features:
             if item not in self.df.columns:
@@ -165,6 +217,7 @@ class esml:
         self.Y = self.df[label]
         print("The features is %s" % str(features))
         print("The label is [%s]" % str(label))
+        print()
     
     
     # 切分資料
@@ -175,6 +228,7 @@ class esml:
         print("train:test = %d : %d" % (int((1-split_rate)*100), int(split_rate*100)))
         print("test includes:")
         print(Counter(self.Y_test))
+        print()
         
     # 訓練model
     def fit(self,
@@ -253,6 +307,11 @@ class esml:
             tree = True,
             random_forest = True, 
             xgboost = True):
+        
+        # 檢查是否為二分類
+        if len(set(self.Y_train)) != 2:
+            print("ROC曲線只支援二分類")
+            return
     
         # show decicion tree
         if tree is True:
@@ -270,7 +329,12 @@ class esml:
     def prc(self,
             tree = True,
             random_forest = True, 
-            xgboost = True): 
+            xgboost = True):
+        
+        # 檢查是否為二分類
+        if len(set(self.Y_train)) != 2:
+            print("PRC曲線只支援二分類")
+            return
         
         # show decicion tree
         if tree is True:
@@ -290,7 +354,18 @@ class esml:
             tree = True,
             random_forest = True, 
             xgboost = True):
-        print()
+        
+        # show decicion tree
+        if tree is True:
+            cm_plot(self.Y_test, predict_label=self.dtc.predict(self.X_test), title="Decision Tree")
+        
+        # show random forest
+        if random_forest is True:
+            cm_plot(self.Y_test, predict_label=self.rfc.predict(self.X_test), title="Random Forest")
+            
+        # fit XGBoost
+        if xgboost is True:
+            cm_plot(self.Y_test, predict_label=self.xgbc.predict(self.X_test), title="XGboost")
         
     
     
@@ -304,26 +379,32 @@ class esml:
             ):
         print("Show result:\n")
         
-        for classifier in self.acc:
-            print("About the model %s" % str(classifier))
-            # Accuracy
-            print("\tAccuracy is %.3f" % self.acc[classifier])
-            # confution matrix
+        
+        accuracy()
+        roc()
+        prc()
         
         
 
 
-# In[148]:
+# In[70]:
 
 
 if __name__ == "__main__":
     print("測試：")
     tmp = esml()
-    tmp.read_file(filename="./data/親權判決相關標註數據_rename.xlsx",remove_title=True)
-    tmp.load_data(features = ["S"+str(i+1) for i in range (13)], label = "Result",drop_select=[0])
+    tmp.read_file(filename="./data/wine_data.csv",remove_title=True)
+    tmp.load_data(features = None, label = "Class",drop_select=[3])
     tmp.split(split_rate = 0.25, random_state = 1)
     tmp.fit()
     tmp.accuracy()
-    tmp.roc()
+#     tmp.roc()
     tmp.prc()
+    tmp.confusion_matrix()
+
+
+# In[ ]:
+
+
+
 
